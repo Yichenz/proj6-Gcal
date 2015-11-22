@@ -7,10 +7,13 @@
      href="//cdn.jsdelivr.net/bootstrap/latest/css/bootstrap.css"
 />
 
+<!--
 <link rel="stylesheet" type="text/css"
  href="/static/js/node_modules/bootstrap-daterangepicker/daterangepicker.css"
 />
+-->
 
+<!-- our own css -->
 <link rel="stylesheet" type="text/css"
     href="/static/css/busy.css"
 />
@@ -21,18 +24,27 @@
 </script>
 
 
+<!-- for date range picker -->
+<!-- Include Required Prerequisites -->
+<script type="text/javascript" src="//cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+ 
+<!-- Include Date Range Picker -->
+<script type="text/javascript" src="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.js"></script>
+<link rel="stylesheet" type="text/css" href="//cdn.jsdelivr.net/bootstrap.daterangepicker/2/daterangepicker.css" />
+
+
 <!-- The rest of our javascript dependencies are bundled and -->
-<!-- 'minified' by 'browserify'  -->
+<!-- 'minified' by 'browserify' NOTE: disabled  -->
+<!--
 <script type="text/javascript" 
    src="/static/js/busy.min.js">
 </script>
+-->
 
 </head>
 
 <body>
 <div class="container">
-
-<h1>Busy times</h1>
 
 <!--
   -- If there are any warnings or other messages from a prior action,
@@ -50,15 +62,40 @@
   {% endif %}
 {% endwith %}
 
+
+<!-- display the busy times -->
+{% if session.calendars is defined  %}
+  <h1>Busy times</h1>
+  {% for cal in session.calendars if cal.selected %}
+      <div class="row space-below hidden" id="{{ cal.num_id }}_busy">
+        <div class="col-xs-4"> {{ cal.summary }}: </div>
+        <div class="col-xs-8">
+          <ul>
+            {% for event in cal.events %}
+              {% if event.start.dateTime is defined and event.end.dateTime is defined %}
+              <li> {{ event.summary }}: {{ event.start.dateTime | fmtdatetime  }} -- {{ event.end.dateTime |fmtdatetime }} </li>
+              {% elif event.start.date is defined and event.end.date is defined %}
+              <li> {{ event.summary }} (all day): {{ event.start.date |fmtdate  }} -- {{ event.end.date | fmtdate }} </li>
+              {% endif %}
+            {% else %}
+              <li>no blocking events</li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+  {% endfor %}
+{% endif %}
+
+
 <h2>Date range</h2>
   <form action="/setrange" method="post">
-  <input type="text" name="daterange" size="12"
+  <input type="text" name="daterange" size="14"
     {% if session.daterange is defined %}
          value="{{session.daterange}}"
     {% endif %}
      class="pull-down"
      style="background: #fff; cursor: pointer; padding: 5px 10px;
-     border: 1px solid #ccc; width: 12em" >
+     border: 1px solid #ccc; width: 14em" >
   <script type="text/javascript">
   $(function() {
   $('input[name="daterange"]').daterangepicker(
@@ -79,25 +116,38 @@
 <br /><input type="submit" value="Choose" />
 </form>
 
-    <!--
-    Show the calendar list (if we have it).  This will need to be turned into
-    a form from which calendars can be picked. Up to three entries are
-    shown in each row (but the order is across then down; I would
-    prefer down then across). 
-    -->
+<!-- select calendars -->
 {% if session.calendars is defined  %}
+  <h2> Calendars </h2>
   <div class="row">
   {% for cal in session.calendars if cal.selected %}
-          <div class="col-md-4">
-	   {{ cal.summary }}
-          </div>
-         {% if loop.index is divisibleby 3 %}
-          </div> <div class="row">
-         {% endif %}
+     <div class="col-xs-4">
+       <input type="checkbox" name = "cal_select" id="{{ cal.num_id }}"> {{ cal.summary }}
+     </div>
+     {% if loop.index is divisibleby 3 %}
+      </div> <div class="row">
+     {% endif %}
   {% endfor %}
   </div>
 {% endif %}
+
+
+<!-- javascript to handle calendar checkbox -->
+<script>
+//when document is ready
+$(document).ready(function(){
+
+  //when checkbox is clicked
+  $("input[name=cal_select]").change(function(){
+      
+    var cal = $(this).attr('id');
+    $('#' + cal + '_busy').toggleClass( "hidden" );
+          
+  });
+
+});
+</script>
     
 
-  </div>  <!-- container (for bootstrap) -->
-  </body> </html>
+</div>  <!-- container (for bootstrap) -->
+</body> </html>

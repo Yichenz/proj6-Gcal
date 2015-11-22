@@ -191,6 +191,15 @@ def setrange():
     daterange_parts = daterange.split()
     flask.session['begin_date'] = interpret_date(daterange_parts[0])
     flask.session['end_date'] = interpret_date(daterange_parts[2])
+    BTime = arrow.get(flask.session['begin_date'])
+    BHour = arrow.get(flask.session['begin_time']).hour
+    BTime = BTime.replace(hours = BHour)
+    flask.session['begin_dateTime'] = BTime.isoformat()
+    
+    ETime = arrow.get(flask.session['end_date'])
+    EHour = arrow.get(flask.session['end_time']).hour
+    ETime = ETime.replace(hours = EHour)
+    flask.session['end_dateTime'] = ETime.isoformat()
     app.logger.debug("Setrange parsed {} - {}  dates as {} - {}".format(
       daterange_parts[0], daterange_parts[1], 
       flask.session['begin_date'], flask.session['end_date']))
@@ -217,8 +226,14 @@ def init_session_values():
         tomorrow.format("MM/DD/YYYY"),
         nextweek.format("MM/DD/YYYY"))
     # Default time span each day, 8 to 5
-    flask.session["begin_time"] = interpret_time("9am")
+    flask.session["begin_time"] = interpret_time("8am")
     flask.session["end_time"] = interpret_time("5pm")
+
+    BTime = tomorrow.floor('day').replace(hours =+8)
+    ETime = nextweek.floor('day').replace(hours =+17)
+    flask.session['begin_dateTime'] = BTime.isoformat()
+    flask.session['end_dateTime'] = ETime.isoformat()
+
 
 def interpret_time( text ):
     """
@@ -280,7 +295,39 @@ def list_calendars(service):
     for cal in calendar_list:
         kind = cal["kind"]
         id = cal["id"]
-        if "description" in cal: 
+        events = service.events().list(calendarId=id).execute()
+        partR = []
+        for evn in events['items']:
+            if "transparency" not in evn:
+                Scheck = False
+                Echeck = False
+                BTime = arrow.get(flask.session['begin_dateTime'])
+                ETime = arrow.get(flask.session['end_dateTime'])
+                begin_date = arrow.get(flask.session['begin_date'])
+                end_date = arrow.get(flask.session['end_date'])
+    
+                if "start" in evn:
+                    start = evn["start"]
+                    if "dateTime" in start:
+                        dateTime = arrow.get(start["dateTime"])
+                        Scheck = True
+                    elif "date" in start:
+                        date = arrow.get(start["date"], "YYYY-MM-DD").replace(tzinfo=tz.tzlocal())
+                        Scheck = True
+                if "end" in evn:
+                    end = evn["end"]
+                    if "dateTime" in end:
+                        dateTime = arrow.get(end["dateTime"])
+                        Echeck = True
+                    elif "date" in start:
+                        date = arrow.get(end["date"],"YYYY-MM-DD").replace(tzinfo=tz.tzlocal())
+                        Echeck = True
+                if Scheck == True and Echeck == True:
+                    partR.append(evn)
+                    
+    
+    
+        if "description" in cal:
             desc = cal["description"]
         else:
             desc = "(no description)"
@@ -295,7 +342,8 @@ def list_calendars(service):
             "id": id,
             "summary": summary,
             "selected": selected,
-            "primary": primary
+            "primary": primary,
+            "events" : partR
             })
     return sorted(result, key=cal_sort_key)
 
@@ -338,6 +386,14 @@ def format_arrow_time( time ):
         return normal.format("HH:mm")
     except:
         return "(bad time)"
+@app.template_filter('fmtdatetime')
+def format_arrow_time(time):
+    try:
+        normal = arrow.get(time)
+        return normal.format("MM/DD/YYYY HH:mm")
+    except:
+        return "(bad tiem)"
+
     
 #############
 

@@ -5,9 +5,9 @@ Edit to fit development or deployment environment.
 """
 import random 
 
-### My local development environment
-#PORT=5000
-#DEBUG = True
+My local development environment
+PORT=5000
+
 
 
 ### On ix.cs.uoregon.edu (Michal Young's instance of MongoDB)

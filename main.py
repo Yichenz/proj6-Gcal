@@ -58,7 +58,18 @@ def choose():
 
     gcal_service = get_gcal_service(credentials)
     app.logger.debug("Returned from get_gcal_service")
-    flask.session['calendars'] = list_calendars(gcal_service)
+
+
+    bounds  = {
+              "begin_dateTime" : flask.session["begin_dateTime"],
+              "end_dateTime" : flask.session["end_dateTime"],
+              "begin_date" : flask.session["begin_date"],
+              "end_date" : flask.session["end_date"],
+              "begin_time" : flask.session["begin_time"],
+              "end_time" : flask.session["end_time"]
+    }
+    flask.session['calendars'] = list_calendars(gcal_service, bounds)
+    flask.session['free_times'] = get_free_time(flask.session['calendars'], bounds)
     return render_template('index.html')
 
 ####
@@ -191,6 +202,8 @@ def setrange():
     daterange_parts = daterange.split()
     flask.session['begin_date'] = interpret_date(daterange_parts[0])
     flask.session['end_date'] = interpret_date(daterange_parts[2])
+
+
     BTime = arrow.get(flask.session['begin_date'])
     BHour = arrow.get(flask.session['begin_time']).hour
     BTime = BTime.replace(hours = BHour)
@@ -201,8 +214,8 @@ def setrange():
     ETime = ETime.replace(hours = EHour)
     flask.session['end_dateTime'] = ETime.isoformat()
     app.logger.debug("Setrange parsed {} - {}  dates as {} - {}".format(
-      daterange_parts[0], daterange_parts[1], 
-      flask.session['begin_date'], flask.session['end_date']))
+      daterange_parts[0], daterange_parts[2], 
+      flask.session['begin_dateTime'], flask.session['end_dateTime']))
     return flask.redirect(flask.url_for("choose"))
 
 ####
@@ -280,7 +293,7 @@ def next_day(isotext):
 #
 ####
   
-def list_calendars(service):
+def list_calendars(service,bounds):
     """
     Given a google 'service' object, return a list of
     calendars.  Each calendar is represented by a dict, so that
@@ -297,20 +310,25 @@ def list_calendars(service):
         id = cal["id"]
         events = service.events().list(calendarId=id).execute()
         partR = []
+
+        BTime = arrow.get(bounds['begin_dateTime'])
+        ETime = arrow.get(bounds['end_dateTime'])
+        begin_date = arrow.get(bounds['begin_date'])
+        end_date = arrow.get(bounds['end_date'])
+        BT = arrow.get(bounds['begin_time'])
+        ET = arrow.get(bounds['end_time'])
         for evn in events['items']:
             if "transparency" not in evn:
                 Scheck = False
                 Echeck = False
-                BTime = arrow.get(flask.session['begin_dateTime'])
-                ETime = arrow.get(flask.session['end_dateTime'])
-                begin_date = arrow.get(flask.session['begin_date'])
-                end_date = arrow.get(flask.session['end_date'])
+                
     
                 if "start" in evn:
                     start = evn["start"]
                     if "dateTime" in start:
                         dateTime = arrow.get(start["dateTime"])
-                        Scheck = True
+                        if(dateTime < ETime and dateTime.time() < ET.time()):
+                          Scheck = True
                     elif "date" in start:
                         date = arrow.get(start["date"], "YYYY-MM-DD").replace(tzinfo=tz.tzlocal())
                         Scheck = True
@@ -318,7 +336,8 @@ def list_calendars(service):
                     end = evn["end"]
                     if "dateTime" in end:
                         dateTime = arrow.get(end["dateTime"])
-                        Echeck = True
+                        if(BTime < dateTime and BT.time() < dateTime.time()):
+                          Echeck = True
                     elif "date" in start:
                         date = arrow.get(end["date"],"YYYY-MM-DD").replace(tzinfo=tz.tzlocal())
                         Echeck = True
@@ -346,6 +365,77 @@ def list_calendars(service):
             "events" : partR
             })
     return sorted(result, key=cal_sort_key)
+
+
+def get_free_time(calendars,bounds):
+  free = []
+
+  BTime = arrow.get(bounds['begin_dateTime'])
+  ETime = arrow.get(bounds['end_dateTime'])
+  begin_date = arrow.get(bounds['begin_date'])
+  end_date = arrow.get(bounds['end_date'])
+  BT = arrow.get(bounds['begin_time'])
+  ET = arrow.get(bounds['end_time'])
+
+  for f in arrow.Arrow.range('day', BTime,ETime):
+    D_start = f.replace(hour= BT.hour)
+    D_start = D_start.replace(minute = BT.minute)
+    D_end = f.replace(hour = ET.hour)
+    D_end = D_end.replace(minute = ET.minute)
+    free.append([D_start,D_end])
+
+
+    for c in calendars:
+      for evn in c["events"]:
+        start = evn["start"]
+        if 'dateTime' in start:
+          S_dt = arrow.get(start['dateTime'])
+        elif 'date' in start:
+          S_dt  =arrow.get(start['date'], 'YYYY-MM-DD')
+        end = evn["end"]
+        if 'dateTime' in end:
+          E_dt = arrow.get(end['dateTime'])
+        elif 'date' in end:
+          E_dt = arrow.get(end('date'), 'YYYY-MM-DD')
+
+        add = []
+        remove = []
+        for i in free:
+          range1 = i[0]
+          range2 = i[1]
+
+          if(S_dt >= range2 or E_dt <= range1):
+            continue
+
+          elif(S_dt <= rang1 and E_dt < range2):
+            add.append([E_dt,range2])
+            remove.append(i)
+
+          elif(S_dt > range1 and E_dt >= range2):
+            add.append([range1,S_dt])
+            remove.append(i)
+
+          elif(S_dt > range1 and E_dt < range2):
+            add.append([range1, S_dt])
+            add.append([E_dt,range2])
+            remove.append(i)
+          else:
+            remove.append(i)
+
+
+        for a in remove:
+          free.remove(a)
+        free.extend(add)
+   
+
+    for i in free:
+      i[0] = i[0].isoformat()
+      i[1] = i[1].isoformat()
+    return sorted(free)
+
+
+
+
 
 
 def cal_sort_key( cal ):

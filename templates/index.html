@@ -62,7 +62,14 @@
   {% endif %}
 {% endwith %}
 
-
+{% if session.free_times%}
+  <h1> Free Time</h1>
+    <ul>
+    {% for t in session.free_times%}
+      <li>{{t[0] | fmtdatetime}} -- {{t[1] | fmtdatetime}} </li>
+    {%endfor%}
+    </ul>
+  {%endif %}
 <!-- display the busy times -->
 {% if session.calendars is defined  %}
   <h1>Busy times</h1>
